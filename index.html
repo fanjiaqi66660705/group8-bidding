@@ -53,11 +53,6 @@
   .btn:active{transform:translateY(1px)}
   .btn-light{background:#fff;color:var(--purple-d);box-shadow:0 6px 18px rgba(0,0,0,.15)}
   .btn-light:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(0,0,0,.2)}
-  .btn-ghost{background:rgba(255,255,255,.14);color:#fff;border:1.5px solid rgba(255,255,255,.45)}
-  .btn-ghost:hover{background:rgba(255,255,255,.24)}
-  .btn-small{padding:7px 14px;font-size:13px;border-radius:9px}
-  .btn-danger{background:#ef4444;color:#fff}
-  .btn-danger:hover{background:#dc2626}
 
   /* ---------- 身份选择 ---------- */
   .identity-bar{
@@ -76,6 +71,13 @@
     padding:6px 14px;border-radius:999px;font-size:13px;font-weight:700;
   }
   .identity-tag.leader{background:#fef3c7;color:#b45309}
+  .sync-chip{
+    font-size:12.5px;font-weight:700;padding:7px 14px;border-radius:999px;cursor:pointer;
+    white-space:nowrap;user-select:none;
+  }
+  .sync-chip.ok{background:#d1fae5;color:#065f46}
+  .sync-chip.busy{background:#e5e7eb;color:#4b5563}
+  .sync-chip.err{background:#fee2e2;color:#991b1b}
 
   /* ---------- 概览 ---------- */
   .overview{
@@ -219,7 +221,7 @@
   @media print{
     body{background:#fff}
     header.banner{box-shadow:none;border-radius:0;margin:0 0 16px;padding:26px 30px}
-    .banner-actions,.btn,.slot-btn,.mi-cancel{display:none!important}
+    .banner-actions,.btn,.slot-btn,.mi-cancel,.sync-chip{display:none!important}
     .wrap{max-width:100%;padding:0 14px 30px}
     .session{box-shadow:none;break-inside:avoid;border:1.5px solid #ccc}
     .sessions{grid-template-columns:repeat(2,1fr);gap:12px}
@@ -238,7 +240,7 @@
 <header class="banner">
   <span class="badge-eyebrow">🎬 ENGLISH VIDEO · LISTENING & SPEAKING</span>
   <h1><span class="grp">第八组</span> · 任务抢单系统</h1>
-  <p class="sub">10次展示 · 7大岗位 · 先到先得，每人每个岗位都要尝试一遍，组长组员完全平等。</p>
+  <p class="sub">10次展示 · 7大岗位 · 先到先得云端实时同步，每人每个岗位都要尝试一遍，组长组员完全平等。</p>
   <div class="banner-actions">
     <button class="btn btn-light" id="btnPrint">🖨️ 打印 / 导出 PDF</button>
   </div>
@@ -253,6 +255,7 @@
       <option value="">— 请选择你的身份 —</option>
     </select>
     <span class="identity-tag" id="myTag" style="display:none"></span>
+    <span class="sync-chip busy" id="syncChip" title="点击重新连接">🔄 连接云端中…</span>
   </div>
 
   <!-- 我的面板 -->
@@ -280,7 +283,7 @@
 
   <!-- 进度表 -->
   <div class="sec-title">
-    <h2>📊 板块覆盖进度表</h2><span class="tip">目标：每人每板块至少 1 次</span>
+    <h2>📊 板块覆盖进度表</h2><span class="tip">目标：每人每岗位至少 1 次</span>
   </div>
   <div class="progress-card">
     <table class="pmatrix" id="pmatrix"></table>
@@ -304,7 +307,7 @@ const ROLES = [
 ];
 const SLOT_IDS = ['leader','research','design','translate','spoken','present','qa'];
 
-// 10 次展示：主题 + 日期（图片数据）
+// 10 次展示：主题 + 日期
 const SESSIONS_DATA = [
   {n:1,  topic:'Unit 1 Person to person',                                    date:'10.12-10.18', type:'ppt'},
   {n:2,  topic:'Unit 1 Project: Telling a story about an interpersonal conflict (p.16)', date:'10.19-10.25', type:'ppt'},
@@ -318,92 +321,199 @@ const SESSIONS_DATA = [
   {n:10, topic:'Unit 5 Project: Giving a presentation on your favourite artwork (p.96)', date:'12.14-12.20', type:'ppt'}
 ];
 
-const STORAGE_KEY = 'eng-group8-bidding-v1';
+/* ============================================================
+   GitHub 云端配置（仓库即数据库）
+============================================================ */
+const GH = {
+  owner: 'fanjiaqi66660705',
+  repo:  'group8-bidding',
+  branch:'main',
+  file:  'state.json',
+  token: '{{3Js0oYLPnYrQ6zaKHEhxQFWjAsX}}'
+};
+const GH_FILE_URL = `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.file}`;
+const IDKEY   = 'eng-group8-identity';
+const CACHEKEY= 'eng-group8-state-cache';
+
 let state = null;
-let myName = ''; // 当前登录身份
+let myName = '';
+let etag = null;      // 条件请求缓存，304 不计费
+let lastSha = null;   // 乐观锁
 
 /* ============================================================
-   日期解析：把 "10.12-10.18" 转成 Date 对象（取结束日期）
+   日期解析与开放规则
 ============================================================ */
 function parseDate(str){
-  // str like "10.12-10.18" -> 取结束日期 10.18，年份用当前年
   const parts = str.split('-');
-  const end = parts[1].trim(); // "10.18"
+  const end = parts[1].trim();
   const [m, d] = end.split('.').map(Number);
   const now = new Date();
-  let year = now.getFullYear();
-  // 如果日期已过，尝试下一年（方便跨年测试）
-  let date = new Date(year, m-1, d);
-  return date;
+  return new Date(now.getFullYear(), m-1, d);
 }
 
-/* ============================================================
-   状态管理
-============================================================ */
-function defaultState(){
-  const blank = {}; SLOT_IDS.forEach(id=>blank[id]='');
-  return {
-    // sessions[i] = { leader:'', research:'', design:'', translate:'', spoken:'', present:'', qa:'' }
-    sessions: Array.from({length:10}, ()=>({...blank})),
-    types: Array(10).fill('ppt') // 每场形式：ppt | drama
-  };
-}
-
-function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-function load(){
-  try{
-    const s = localStorage.getItem(STORAGE_KEY);
-    if(s){
-      const parsed = JSON.parse(s);
-      // 旧格式（无 types 字段）直接丢弃，使用新默认数据
-      if(parsed && Array.isArray(parsed.types) && parsed.types.length===10){
-        state = parsed; return;
-      }
-    }
-  }catch{}
-  state = defaultState();
-}
-
-/* ============================================================
-   约束检查
-============================================================ */
 function isOpen(sessionIdx){
-  // 开放规则：第1场直接开放；之后每场在上一次汇报当天中午12:00开放
+  // 第1场直接开放；之后每场在上一次汇报当天中午12:00开放
   if(sessionIdx === 0) return true;
-  const prevEnd = parseDate(SESSIONS_DATA[sessionIdx-1].date); // 上一次汇报日（取区间结束日）
+  const prevEnd = parseDate(SESSIONS_DATA[sessionIdx-1].date);
   const openTime = new Date(prevEnd.getFullYear(), prevEnd.getMonth(), prevEnd.getDate(), 12, 0, 0);
   return new Date() >= openTime;
 }
 
-// 某场次的开放时间文案（如 "10月18日 12:00"），未开放场次显示用
 function openAtLabel(sessionIdx){
   if(sessionIdx === 0) return '';
   const prevEnd = parseDate(SESSIONS_DATA[sessionIdx-1].date);
   return `${prevEnd.getMonth()+1}月${prevEnd.getDate()}日 12:00`;
 }
 
-function getMyRoleAt(sessionIdx, name){
-  const s = state.sessions[sessionIdx];
+/* ============================================================
+   状态结构
+============================================================ */
+function defaultState(){
+  const blank = {}; SLOT_IDS.forEach(id=>blank[id]='');
+  return {
+    sessions: Array.from({length:10}, ()=>({...blank})),
+    types: Array(10).fill('ppt')
+  };
+}
+function validState(st){
+  return st && Array.isArray(st.sessions) && st.sessions.length===10 &&
+    st.sessions.every(s=>SLOT_IDS.every(id=>typeof s[id]==='string')) &&
+    Array.isArray(st.types) && st.types.length===10;
+}
+function cacheLocal(){ try{ localStorage.setItem(CACHEKEY, JSON.stringify(state)); }catch(_){} }
+
+/* ============================================================
+   云端读写（GitHub Contents API）
+============================================================ */
+function b64utf8(str){
+  const bytes = new TextEncoder().encode(str);
+  let bin=''; for(const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+function unb64utf8(b64){
+  const bin = atob(b64.replace(/\s/g,''));
+  return new TextDecoder().decode(Uint8Array.from(bin, c=>c.charCodeAt(0)));
+}
+
+async function cloudGet(force){
+  const headers = {
+    'Authorization': 'Bearer ' + GH.token,
+    'Accept': 'application/vnd.github+json'
+  };
+  if(!force && etag) headers['If-None-Match'] = etag;
+  const resp = await fetch(`${GH_FILE_URL}?ref=${GH.branch}`, {headers:headers, cache:'no-store'});
+  if(resp.status === 304) return {unchanged:true};
+  if(resp.status === 404) return {missing:true};
+  if(resp.status === 401 || resp.status === 403) return {authFail:true};
+  if(!resp.ok) throw new Error('HTTP ' + resp.status);
+  etag = resp.headers.get('ETag');
+  const json = await resp.json();
+  lastSha = json.sha;
+  return {state: JSON.parse(unb64utf8(json.content)), sha: json.sha};
+}
+
+async function cloudPut(remote, sha, msg){
+  const body = {
+    message: msg || ('update by ' + (myName || 'member')),
+    content: b64utf8(JSON.stringify(remote)),
+    branch: GH.branch
+  };
+  if(sha) body.sha = sha;
+  const resp = await fetch(GH_FILE_URL, {
+    method:'PUT',
+    headers:{
+      'Authorization': 'Bearer ' + GH.token,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if(resp.status === 409 || resp.status === 422) return {conflict:true};
+  if(resp.status === 401 || resp.status === 403) return {authFail:true};
+  if(!resp.ok) throw new Error('HTTP ' + resp.status);
+  const json = await resp.json();
+  lastSha = json.content.sha;
+  etag = null;
+  return {ok:true, sha: json.content.sha};
+}
+
+// 所有修改的唯一入口：拉最新 → 校验 → 写回；冲突自动重试（先到先得的关键）
+async function cloudMutate(fn, commitMsg){
+  setSync('busy');
+  for(let attempt=0; attempt<3; attempt++){
+    let remote, sha = null;
+    try{
+      const res = await cloudGet(true);
+      if(res.authFail){ setSync('authfail'); renderAll(); alert('云端令牌已失效，请联系组长更新令牌'); return; }
+      if(res.missing){ remote = defaultState(); }
+      else { remote = res.state; sha = res.sha; }
+    }catch(e){ setSync('offline'); renderAll(); alert('云端连接失败，请检查网络后重试'); return; }
+
+    if(!validState(remote)){ remote = defaultState(); sha = null; }
+
+    const out = fn(remote);
+    if(out && out.ok === false){
+      state = remote; cacheLocal(); setSync('ok'); renderAll();
+      if(out.msg) alert(out.msg);
+      return;
+    }
+    try{
+      const r = await cloudPut(remote, sha, commitMsg);
+      if(r.conflict) continue;           // 别人抢先写入 → 重新拉取校验
+      if(r.authFail){ setSync('authfail'); renderAll(); alert('云端令牌已失效'); return; }
+      state = remote; cacheLocal(); setSync('ok'); renderAll();
+      return;
+    }catch(e){ setSync('offline'); renderAll(); alert('云端连接失败，请重试'); return; }
+  }
+  setSync('ok'); renderAll(); alert('当前抢单人数较多，请稍后再试');
+}
+
+async function poll(){
+  try{
+    const res = await cloudGet(false);
+    if(res.authFail){ setSync('authfail'); return; }
+    if(res.state){ state = res.state; cacheLocal(); setSync('ok'); renderAll(); }
+    else if(res.unchanged){ setSync('ok'); }
+  }catch(e){ setSync('offline'); }
+}
+
+function setSync(mode){
+  const chip = document.getElementById('syncChip');
+  if(!chip) return;
+  if(mode === 'ok'){ chip.className='sync-chip ok'; chip.textContent='☁️ 已连接云端'; }
+  else if(mode === 'busy'){ chip.className='sync-chip busy'; chip.textContent='🔄 同步中…'; }
+  else if(mode === 'authfail'){ chip.className='sync-chip err'; chip.textContent='🔑 令牌失效，点我重试'; }
+  else { chip.className='sync-chip err'; chip.textContent='⚠️ 云端连接失败，点我重试'; }
+}
+
+/* ============================================================
+   约束检查（pure：基于传入的 state）
+============================================================ */
+function getMyRoleAtIn(st, sessionIdx, name){
+  const s = st.sessions[sessionIdx];
   for(const role of SLOT_IDS){ if(s[role]===name) return role; }
   return null;
 }
 
-// 检查：name 在 sessionIdx 抢 role 是否合法
-function canBid(sessionIdx, role, name){
+function canBidOn(st, sessionIdx, role, name){
   if(!name) return {ok:false, msg:'请先选择身份'};
   if(!isOpen(sessionIdx)) return {ok:false, msg:'本场尚未开放'};
-  if(state.sessions[sessionIdx][role]) return {ok:false, msg:'该岗位已被抢'};
-  // 同一人同场只能抢一个岗位
-  if(getMyRoleAt(sessionIdx, name)) return {ok:false, msg:'你在本场已抢到岗位'};
+  if(st.sessions[sessionIdx][role]) return {ok:false, msg:'该岗位已被抢'};
+  if(getMyRoleAtIn(st, sessionIdx, name)) return {ok:false, msg:'你在本场已抢到岗位'};
   // 不能和最近一次抢到的岗位相同
   for(let i = sessionIdx - 1; i >= 0; i--){
-    const prevRole = getMyRoleAt(i, name);
+    const prevRole = getMyRoleAtIn(st, i, name);
     if(prevRole){
       if(prevRole === role) return {ok:false, msg:'上次已选过该岗位，请尝试其他岗位'};
       break; // 只对比最近一次
     }
   }
   return {ok:true};
+}
+
+// 统计某人抢到某岗位的总次数
+function getBlockCount(name, role){
+  return state.sessions.filter(s=>s[role]===name).length;
 }
 
 /* ============================================================
@@ -445,7 +555,7 @@ function renderMyPanel(){
   const empty = document.getElementById('myEmpty');
   let html='';
   state.sessions.forEach((s,si)=>{
-    const myRole = getMyRoleAt(si, myName);
+    const myRole = getMyRoleAtIn(state, si, myName);
     if(myRole){
       const role = ROLES.find(r=>r.id===myRole);
       const canCancel = isOpen(si);
@@ -492,8 +602,7 @@ function renderSessions(){
       <div class="slots">
         ${ROLES.map(r=>{
           const taken = s[r.id];
-          const check = myName ? canBid(si, r.id, myName) : {ok:false};
-          // 智能提示：当前用户在这个岗位还是 0 次，鼓励优先抢
+          const check = canBidOn(state, si, r.id, myName);
           const myZero = myName && getBlockCount(myName, r.id) === 0;
           return `
           <div class="slot" data-role="${r.id}">
@@ -518,11 +627,6 @@ function renderSessions(){
   }).join('');
 }
 
-// 统计某人抢到某岗位的总次数
-function getBlockCount(name, role){
-  return state.sessions.filter(s=>s[role]===name).length;
-}
-
 function renderOverview(){
   let filled=0, open=0;
   state.sessions.forEach((s,si)=>{
@@ -534,7 +638,6 @@ function renderOverview(){
 }
 
 function renderProgress(){
-  // 统计每人每岗位次数
   const m = MEMBERS.map(()=>ROLES.map(()=>0));
   state.sessions.forEach(s=>{
     SLOT_IDS.forEach((role,ri)=>{
@@ -579,6 +682,7 @@ function renderAll(){
 function bind(){
   document.getElementById('whoami').addEventListener('change', e=>{
     myName = e.target.value;
+    try{ localStorage.setItem(IDKEY, myName); }catch(_){}
     renderAll();
   });
 
@@ -587,44 +691,78 @@ function bind(){
     const chip = e.target.closest('.s-type');
     if(chip){
       const si = +chip.closest('.session').dataset.session;
-      state.types[si] = state.types[si]==='drama' ? 'ppt' : 'drama';
-      save(); renderAll();
+      cloudMutate(st=>{
+        st.types[si] = st.types[si]==='drama' ? 'ppt' : 'drama';
+      }, `切换第${si+1}场展示形式`);
       return;
     }
     const btn = e.target.closest('.slot-btn');
     if(!btn) return;
     const si = +btn.dataset.s, role = btn.dataset.r;
+    const roleName = (ROLES.find(r=>r.id===role)||{}).name || role;
     if(btn.classList.contains('cancel')){
-      // 取消
-      state.sessions[si][role] = '';
-      save(); renderAll();
+      cloudMutate(st=>{ st.sessions[si][role] = ''; }, `取消: ${myName} 第${si+1}场 ${roleName}`);
       return;
     }
-    // 抢单
-    const check = canBid(si, role, myName);
-    if(!check.ok){ alert(check.msg); return; }
-    state.sessions[si][role] = myName;
-    save(); renderAll();
+    cloudMutate(st=>{
+      const check = canBidOn(st, si, role, myName);
+      if(!check.ok) return check;
+      st.sessions[si][role] = myName;
+    }, `抢单: ${myName} → 第${si+1}场 ${roleName}`);
   });
 
   document.getElementById('mylist').addEventListener('click', e=>{
     const btn = e.target.closest('.mi-cancel');
     if(!btn) return;
     const si = +btn.dataset.s, role = btn.dataset.r;
-    state.sessions[si][role] = '';
-    save(); renderAll();
+    const roleName = (ROLES.find(r=>r.id===role)||{}).name || role;
+    cloudMutate(st=>{ st.sessions[si][role] = ''; }, `取消: ${myName} 第${si+1}场 ${roleName}`);
+  });
+
+  document.getElementById('syncChip').addEventListener('click', ()=>{
+    setSync('busy'); poll();
   });
 
   document.getElementById('btnPrint').addEventListener('click', ()=>window.print());
 }
 
 /* ============================================================
-   启动
+   启动：先渲染本地缓存，再连云端
 ============================================================ */
-(function init(){
-  load();
+(async function init(){
+  myName = '';
+  try{ myName = localStorage.getItem(IDKEY) || ''; }catch(_){}
+  try{
+    const c = localStorage.getItem(CACHEKEY);
+    if(c){ const st = JSON.parse(c); if(validState(st)) state = st; }
+  }catch(_){}
+  if(!state) state = defaultState();
   renderAll();
   bind();
+  setSync('busy');
+
+  try{
+    const res = await cloudGet(true);
+    if(res.authFail){ setSync('authfail'); renderAll(); return; }
+    if(res.missing){
+      state = defaultState();
+      const r = await cloudPut(state, null, 'init: 默认抢单状态');
+      if(r.conflict){ setTimeout(poll, 1500); }
+      setSync('ok');
+    }else{
+      state = validState(res.state) ? res.state : defaultState();
+      if(!validState(res.state)){ try{ await cloudPut(state, res.sha, 'fix: 重置状态格式'); }catch(_){}}
+      setSync('ok');
+    }
+    cacheLocal();
+    renderAll();
+  }catch(e){
+    setSync('offline');
+  }
+
+  // 每 10 秒自动同步；切回页面立即同步
+  setInterval(poll, 10000);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) poll(); });
 })();
 </script>
 </body>
