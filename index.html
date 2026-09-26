@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第八组 · 任务抢单系统</title>
+<style>
+  :root{
+    --purple:#7c3aed; --purple-d:#5b21b6; --pink:#db2777;
+    --ink:#1e1b2e; --muted:#6b6880; --line:#e8e4f2;
+    --bg:#f3f1fa; --card:#ffffff;
+    --shadow:0 6px 24px rgba(91,33,182,.08);
+    --shadow-h:0 14px 40px rgba(91,33,182,.16);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.6;
+    background-image:radial-gradient(circle at 12% -5%,rgba(124,58,237,.10),transparent 42%),
+                     radial-gradient(circle at 92% 0%,rgba(219,39,119,.08),transparent 40%);
+    min-height:100vh;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px 80px}
+
+  /* ---------- Banner ---------- */
+  header.banner{
+    position:relative;overflow:hidden;border-radius:0 0 28px 28px;
+    background:linear-gradient(135deg,#6d28d9 0%,#7c3aed 42%,#db2777 100%);
+    color:#fff;padding:46px 44px 40px;margin-bottom:30px;
+    box-shadow:0 18px 50px rgba(109,40,217,.35);
+  }
+  header.banner::before,header.banner::after{
+    content:"";position:absolute;border-radius:50%;
+    background:rgba(255,255,255,.10);
+  }
+  header.banner::before{width:300px;height:300px;right:-90px;top:-130px}
+  header.banner::after{width:180px;height:180px;left:62%;bottom:-110px;background:rgba(255,255,255,.07)}
+  .badge-eyebrow{
+    display:inline-block;font-size:13px;letter-spacing:3px;font-weight:600;
+    background:rgba(255,255,255,.16);padding:5px 15px;border-radius:999px;margin-bottom:14px;
+    backdrop-filter:blur(4px);
+  }
+  h1{font-size:34px;letter-spacing:1px;margin-bottom:8px;position:relative}
+  h1 .grp{font-weight:800}
+  .banner p.sub{font-size:15px;opacity:.92;position:relative;max-width:640px}
+  .banner-actions{position:relative;margin-top:22px;display:flex;gap:12px;flex-wrap:wrap}
+  .btn{
+    border:none;cursor:pointer;font-size:14.5px;font-weight:600;
+    padding:11px 22px;border-radius:12px;display:inline-flex;align-items:center;gap:8px;
+    transition:transform .15s,box-shadow .15s,background .15s;font-family:inherit;
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn-light{background:#fff;color:var(--purple-d);box-shadow:0 6px 18px rgba(0,0,0,.15)}
+  .btn-light:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(0,0,0,.2)}
+  .btn-ghost{background:rgba(255,255,255,.14);color:#fff;border:1.5px solid rgba(255,255,255,.45)}
+  .btn-ghost:hover{background:rgba(255,255,255,.24)}
+  .btn-small{padding:7px 14px;font-size:13px;border-radius:9px}
+  .btn-danger{background:#ef4444;color:#fff}
+  .btn-danger:hover{background:#dc2626}
+
+  /* ---------- 身份选择 ---------- */
+  .identity-bar{
+    background:var(--card);border-radius:16px;padding:18px 22px;box-shadow:var(--shadow);
+    border:1px solid var(--line);margin-bottom:24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  }
+  .identity-label{font-weight:700;font-size:15px;white-space:nowrap}
+  .identity-select{
+    flex:1;min-width:200px;border:2px solid var(--line);border-radius:12px;
+    padding:12px 16px;font-size:15px;font-weight:600;font-family:inherit;background:#fff;
+    color:var(--ink);cursor:pointer;outline:none;transition:border-color .15s;
+  }
+  .identity-select:focus{border-color:var(--purple)}
+  .identity-tag{
+    display:inline-flex;align-items:center;gap:6px;background:#f0eaff;color:var(--purple-d);
+    padding:6px 14px;border-radius:999px;font-size:13px;font-weight:700;
+  }
+  .identity-tag.leader{background:#fef3c7;color:#b45309}
+
+  /* ---------- 概览 ---------- */
+  .overview{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:30px;
+  }
+  .ov-card{
+    background:var(--card);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow);
+    border:1px solid var(--line);display:flex;align-items:center;gap:13px;
+  }
+  .ov-ico{
+    width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:20px;flex:none;
+  }
+  .ov-num{font-size:22px;font-weight:800;line-height:1.2}
+  .ov-label{font-size:12.5px;color:var(--muted)}
+
+  /* ---------- 场次卡片 ---------- */
+  .sec-title{display:flex;align-items:baseline;gap:12px;margin:34px 0 16px}
+  .sec-title h2{font-size:21px;font-weight:800;letter-spacing:.5px}
+  .sec-title span.tip{font-size:13px;color:var(--muted)}
+  .sessions{display:grid;grid-template-columns:repeat(auto-fill,minmax(470px,1fr));gap:20px}
+  .session{
+    background:var(--card);border:1px solid var(--line);border-radius:20px;
+    box-shadow:var(--shadow);overflow:hidden;position:relative;
+    transition:box-shadow .2s,transform .2s;
+  }
+  .session:hover{box-shadow:var(--shadow-h)}
+  .session.locked{opacity:.55}
+  .session.locked .slot{cursor:not-allowed}
+  .session-head{
+    padding:18px 20px 14px;display:flex;align-items:flex-start;gap:14px;position:relative;
+    background:linear-gradient(100deg,rgba(124,58,237,.06),rgba(219,39,119,.04));
+  }
+  .session.drama .session-head{background:linear-gradient(100deg,rgba(217,119,6,.12),rgba(219,39,119,.05))}
+  .s-num{
+    font-size:40px;font-weight:800;line-height:1;
+    background:linear-gradient(135deg,var(--purple),var(--pink));
+    -webkit-background-clip:text;background-clip:text;color:transparent;flex:none;
+    width:54px;
+  }
+  .session.drama .s-num{background:linear-gradient(135deg,#d97706,#db2777);-webkit-background-clip:text;background-clip:text}
+  .s-fields{flex:1;min-width:0}
+  .s-title{font-size:15.5px;font-weight:700;line-height:1.4}
+  .s-meta{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;align-items:center}
+  .s-date{
+    font-size:12.5px;color:var(--muted);background:#f6f4fc;padding:4px 12px;border-radius:999px;
+  }
+  .s-type{
+    font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:999px;color:#fff;
+    cursor:pointer;user-select:none;
+  }
+  .s-type.ppt{background:var(--purple)}
+  .s-type.drama{background:#d97706}
+  .s-openat{
+    font-size:11px;color:#b45309;background:#fef3c7;padding:3px 10px;border-radius:999px;
+  }
+  .s-status{
+    font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:999px;
+  }
+  .s-status.open{background:#d1fae5;color:#065f46}
+  .s-status.locked{background:#fee2e2;color:#991b1b}
+  .s-status.full{background:#dbeafe;color:#1e40af}
+
+  .slots{padding:6px 20px 16px}
+  .slot{
+    display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px dashed var(--line);
+  }
+  .slot-ico{
+    width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:18px;flex:none;
+  }
+  .slot-info{flex:1;min-width:0}
+  .slot-name{font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .slot-duty{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .slot-taken{
+    flex:none;min-width:100px;text-align:right;font-size:13px;font-weight:700;
+  }
+  .slot-taken .who{color:var(--purple-d);font-size:13px}
+  .slot-taken .avatar-mini{
+    display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;
+    color:#fff;font-size:11px;font-weight:700;margin-right:5px;vertical-align:middle;
+  }
+  .slot-btn{
+    flex:none;min-width:100px;border:2px solid var(--purple);border-radius:10px;
+    padding:7px 12px;font-size:13px;font-weight:600;font-family:inherit;background:#fff;
+    color:var(--purple);cursor:pointer;transition:all .15s;text-align:center;
+  }
+  .slot-btn:hover:not(:disabled){background:var(--purple);color:#fff}
+  .slot-btn:disabled{border-color:var(--line);color:#a8a4bd;cursor:not-allowed;background:#f6f4fc}
+  .slot-btn.cancel{border-color:#ef4444;color:#ef4444}
+  .slot-btn.cancel:hover{background:#ef4444;color:#fff}
+
+  /* ---------- 个人面板 ---------- */
+  .mypanel{
+    background:var(--card);border:1px solid var(--line);border-radius:20px;
+    box-shadow:var(--shadow);padding:22px 24px;margin-bottom:24px;
+  }
+  .mypanel h3{font-size:17px;font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .mypanel .empty{color:var(--muted);font-size:14px;padding:20px 0;text-align:center}
+  .mylist{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+  .myitem{
+    display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;
+    background:#f8f6fd;border:1px solid var(--line);
+  }
+  .myitem .avatar-mini{
+    width:28px;height:28px;border-radius:50%;display:grid;place-items:center;
+    color:#fff;font-size:12px;font-weight:700;flex:none;
+  }
+  .myitem .mi-info{flex:1;min-width:0}
+  .myitem .mi-role{font-size:13px;font-weight:700}
+  .myitem .mi-session{font-size:11.5px;color:var(--muted)}
+  .myitem .mi-cancel{
+    border:none;background:none;color:#ef4444;font-size:12px;font-weight:600;cursor:pointer;
+    padding:4px 8px;border-radius:6px;
+  }
+  .myitem .mi-cancel:hover{background:#fee2e2}
+
+  /* ---------- 进度表 ---------- */
+  .progress-card{
+    background:var(--card);border:1px solid var(--line);border-radius:20px;
+    box-shadow:var(--shadow);padding:24px 26px;overflow-x:auto;
+  }
+  table.pmatrix{border-collapse:collapse;width:100%;min-width:780px}
+  table.pmatrix th,table.pmatrix td{padding:10px 8px;text-align:center;font-size:13.5px}
+  table.pmatrix thead th{
+    font-size:12.5px;color:var(--muted);font-weight:700;border-bottom:2px solid var(--line);
+  }
+  table.pmatrix thead th .e{display:block;font-size:17px;margin-bottom:2px}
+  table.pmatrix tbody td{border-bottom:1px solid #f1eef9}
+  table.pmatrix td.mname{
+    text-align:left;font-weight:700;white-space:nowrap;display:flex;align-items:center;gap:8px;
+    border:none;
+  }
+  table.pmatrix td.mname .avatar{width:28px;height:28px;font-size:13px}
+  .pcell{
+    display:inline-grid;place-items:center;min-width:40px;height:34px;border-radius:9px;
+    font-weight:800;font-size:14.5px;
+  }
+  .pcell.zero{background:#fef2f2;color:#dc2626;border:1.5px dashed #fca5a5}
+  .pcell.total{background:#1e1b2e;color:#fff}
+
+  /* ---------- 打印 ---------- */
+  @media print{
+    body{background:#fff}
+    header.banner{box-shadow:none;border-radius:0;margin:0 0 16px;padding:26px 30px}
+    .banner-actions,.btn,.slot-btn,.mi-cancel{display:none!important}
+    .wrap{max-width:100%;padding:0 14px 30px}
+    .session{box-shadow:none;break-inside:avoid;border:1.5px solid #ccc}
+    .sessions{grid-template-columns:repeat(2,1fr);gap:12px}
+  }
+  @media (max-width:560px){
+    header.banner{padding:32px 24px 28px}
+    h1{font-size:26px}
+    .sessions{grid-template-columns:1fr}
+    .slot{flex-wrap:wrap}
+    .slot-taken,.slot-btn{min-width:100%;text-align:left}
+  }
+</style>
+</head>
+<body>
+
+<header class="banner">
+  <span class="badge-eyebrow">🎬 ENGLISH VIDEO · LISTENING & SPEAKING</span>
+  <h1><span class="grp">第八组</span> · 任务抢单系统</h1>
+  <p class="sub">10次展示 · 7大岗位 · 先到先得，每人每个岗位都要尝试一遍，组长组员完全平等。</p>
+  <div class="banner-actions">
+    <button class="btn btn-light" id="btnPrint">🖨️ 打印 / 导出 PDF</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- 身份选择 -->
+  <div class="identity-bar">
+    <span class="identity-label">👤 我是：</span>
+    <select class="identity-select" id="whoami">
+      <option value="">— 请选择你的身份 —</option>
+    </select>
+    <span class="identity-tag" id="myTag" style="display:none"></span>
+  </div>
+
+  <!-- 我的面板 -->
+  <div class="mypanel" id="mypanel" style="display:none">
+    <h3>📋 我的任务面板</h3>
+    <div class="mylist" id="mylist"></div>
+    <div class="empty" id="myEmpty">你还没有抢到任何岗位，快去下方开放场次抢单吧！</div>
+  </div>
+
+  <!-- 概览 -->
+  <div class="overview">
+    <div class="ov-card"><div class="ov-ico" style="background:#f0eaff">👥</div><div><div class="ov-num">7</div><div class="ov-label">组员人数</div></div></div>
+    <div class="ov-card"><div class="ov-ico" style="background:#e7edff">🎯</div><div><div class="ov-num">10</div><div class="ov-label">展示次数</div></div></div>
+    <div class="ov-card"><div class="ov-ico" style="background:#ffeaf4">🧩</div><div><div class="ov-num">7</div><div class="ov-label">任务岗位</div></div></div>
+    <div class="ov-card"><div class="ov-ico" style="background:#e9fbf3">✅</div><div><div class="ov-num" id="ovFilled">0/70</div><div class="ov-label">已抢岗位</div></div></div>
+    <div class="ov-card"><div class="ov-ico" style="background:#fff4e5">🔓</div><div><div class="ov-num" id="ovOpen">0</div><div class="ov-label">开放场次</div></div></div>
+  </div>
+
+  <!-- 场次 -->
+  <div class="sec-title">
+    <h2>📅 十次展示 · 抢单大厅</h2>
+    <span class="tip">上一场汇报当天中午 12:00 自动开放下一场 · 点击形式标签可切换 纯PPT/情景剧</span>
+  </div>
+  <div class="sessions" id="sessions"></div>
+
+  <!-- 进度表 -->
+  <div class="sec-title">
+    <h2>📊 板块覆盖进度表</h2><span class="tip">目标：每人每板块至少 1 次</span>
+  </div>
+  <div class="progress-card">
+    <table class="pmatrix" id="pmatrix"></table>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================
+   数据与常量
+============================================================ */
+const MEMBERS = ['范嘉琪','李想','王雪瑶','王静怡','钱柄男','陈思涵','郭雨萱'];
+const ROLES = [
+  {id:'leader',    icon:'🎯', name:'统筹与策划',      short:'统筹',    color:'#7c3aed', bg:'#f0eaff', duty:'定主题 · 排进度催节点 · 审核内容与PPT · 提交作业'},
+  {id:'research',  icon:'📚', name:'收集资料/写剧本',  short:'资料/剧本', color:'#2563eb', bg:'#e7edff', duty:'查资料案例视频 · 提炼要点 · 情景剧时编写剧本'},
+  {id:'design',    icon:'🎨', name:'PPT制作',        short:'PPT',    color:'#db2777', bg:'#ffeaf4', duty:'排版配图 · 图表动画 · 嵌入音视频素材'},
+  {id:'translate', icon:'🔤', name:'英文翻译',        short:'翻译',    color:'#0d9488', bg:'#e6f7f5', duty:'内容译成地道英文 · 语法与用词准确'},
+  {id:'spoken',    icon:'🗣️', name:'口语优化',        short:'口语',    color:'#d97706', bg:'#fff4e5', duty:'口语化润色 · 设计Hook开场与收尾 · 互动环节'},
+  {id:'present',   icon:'🎤', name:'汇报',           short:'汇报',    color:'#059669', bg:'#e9fbf3', duty:'脱稿展示 · 语速语调 · 肢体语言与眼神交流'},
+  {id:'qa',        icon:'❓', name:'答疑',           short:'答疑',    color:'#4f46e5', bg:'#eef0ff', duty:'现场Q&A · 回答老师与同学的提问'}
+];
+const SLOT_IDS = ['leader','research','design','translate','spoken','present','qa'];
+
+// 10 次展示：主题 + 日期（图片数据）
+const SESSIONS_DATA = [
+  {n:1,  topic:'Unit 1 Person to person',                                    date:'10.12-10.18', type:'ppt'},
+  {n:2,  topic:'Unit 1 Project: Telling a story about an interpersonal conflict (p.16)', date:'10.19-10.25', type:'ppt'},
+  {n:3,  topic:'Unit 2 Healthy and happy',                                   date:'10.26-11.01', type:'ppt'},
+  {n:4,  topic:'Unit 2 Project: Giving a talk about a healthy practice (p.36)', date:'11.02-11.08', type:'ppt'},
+  {n:5,  topic:'Unit 3 My life, my style',                                   date:'11.09-11.15', type:'ppt'},
+  {n:6,  topic:'Unit 3 Project: Giving a speech on lifestyle choices (p.56)',  date:'11.16-11.22', type:'ppt'},
+  {n:7,  topic:'Unit 4 Living with nature',                                  date:'11.23-11.29', type:'ppt'},
+  {n:8,  topic:'Unit 4 Project: Giving a mini lecture on a natural disaster (p.76)', date:'11.30-12.06', type:'ppt'},
+  {n:9,  topic:'Unit 5 For the sake of art',                                 date:'12.07-12.13', type:'ppt'},
+  {n:10, topic:'Unit 5 Project: Giving a presentation on your favourite artwork (p.96)', date:'12.14-12.20', type:'ppt'}
+];
+
+const STORAGE_KEY = 'eng-group8-bidding-v1';
+let state = null;
+let myName = ''; // 当前登录身份
+
+/* ============================================================
+   日期解析：把 "10.12-10.18" 转成 Date 对象（取结束日期）
+============================================================ */
+function parseDate(str){
+  // str like "10.12-10.18" -> 取结束日期 10.18，年份用当前年
+  const parts = str.split('-');
+  const end = parts[1].trim(); // "10.18"
+  const [m, d] = end.split('.').map(Number);
+  const now = new Date();
+  let year = now.getFullYear();
+  // 如果日期已过，尝试下一年（方便跨年测试）
+  let date = new Date(year, m-1, d);
+  return date;
+}
+
+/* ============================================================
+   状态管理
+============================================================ */
+function defaultState(){
+  const blank = {}; SLOT_IDS.forEach(id=>blank[id]='');
+  return {
+    // sessions[i] = { leader:'', research:'', design:'', translate:'', spoken:'', present:'', qa:'' }
+    sessions: Array.from({length:10}, ()=>({...blank})),
+    types: Array(10).fill('ppt') // 每场形式：ppt | drama
+  };
+}
+
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function load(){
+  try{
+    const s = localStorage.getItem(STORAGE_KEY);
+    if(s){
+      const parsed = JSON.parse(s);
+      // 旧格式（无 types 字段）直接丢弃，使用新默认数据
+      if(parsed && Array.isArray(parsed.types) && parsed.types.length===10){
+        state = parsed; return;
+      }
+    }
+  }catch{}
+  state = defaultState();
+}
+
+/* ============================================================
+   约束检查
+============================================================ */
+function isOpen(sessionIdx){
+  // 开放规则：第1场直接开放；之后每场在上一次汇报当天中午12:00开放
+  if(sessionIdx === 0) return true;
+  const prevEnd = parseDate(SESSIONS_DATA[sessionIdx-1].date); // 上一次汇报日（取区间结束日）
+  const openTime = new Date(prevEnd.getFullYear(), prevEnd.getMonth(), prevEnd.getDate(), 12, 0, 0);
+  return new Date() >= openTime;
+}
+
+// 某场次的开放时间文案（如 "10月18日 12:00"），未开放场次显示用
+function openAtLabel(sessionIdx){
+  if(sessionIdx === 0) return '';
+  const prevEnd = parseDate(SESSIONS_DATA[sessionIdx-1].date);
+  return `${prevEnd.getMonth()+1}月${prevEnd.getDate()}日 12:00`;
+}
+
+function getMyRoleAt(sessionIdx, name){
+  const s = state.sessions[sessionIdx];
+  for(const role of SLOT_IDS){ if(s[role]===name) return role; }
+  return null;
+}
+
+// 检查：name 在 sessionIdx 抢 role 是否合法
+function canBid(sessionIdx, role, name){
+  if(!name) return {ok:false, msg:'请先选择身份'};
+  if(!isOpen(sessionIdx)) return {ok:false, msg:'本场尚未开放'};
+  if(state.sessions[sessionIdx][role]) return {ok:false, msg:'该岗位已被抢'};
+  // 同一人同场只能抢一个岗位
+  if(getMyRoleAt(sessionIdx, name)) return {ok:false, msg:'你在本场已抢到岗位'};
+  // 不能和最近一次抢到的岗位相同
+  for(let i = sessionIdx - 1; i >= 0; i--){
+    const prevRole = getMyRoleAt(i, name);
+    if(prevRole){
+      if(prevRole === role) return {ok:false, msg:'上次已选过该岗位，请尝试其他岗位'};
+      break; // 只对比最近一次
+    }
+  }
+  return {ok:true};
+}
+
+/* ============================================================
+   渲染
+============================================================ */
+function memberColor(name){
+  const idx = MEMBERS.indexOf(name);
+  const hue = (idx * 360 / MEMBERS.length + 262) % 360;
+  return `hsl(${hue} 62% 56%)`;
+}
+function memberInitial(name){ return name.charAt(0); }
+function avatarHTML(name, mini){
+  const c = memberColor(name);
+  const size = mini ? 'width:18px;height:18px;' : 'width:40px;height:40px;font-size:16px;';
+  const cls = mini ? 'avatar-mini' : 'avatar';
+  const text = mini ? '' : memberInitial(name);
+  return `<span class="${cls}" title="${name}" style="background:${c};${size}border-radius:50%;display:inline-grid;place-items:center;color:#fff;font-weight:700;flex:none;">${text}</span>`;
+}
+
+function renderIdentity(){
+  const sel = document.getElementById('whoami');
+  sel.innerHTML = '<option value="">— 请选择你的身份 —</option>' +
+    MEMBERS.map(m=>`<option value="${m}" ${m===myName?'selected':''}>${m}${m==='范嘉琪'?'（组长）':''}</option>`).join('');
+  const tag = document.getElementById('myTag');
+  if(myName){
+    tag.style.display='inline-flex';
+    tag.className = 'identity-tag' + (myName==='范嘉琪'?' leader':'');
+    tag.textContent = myName==='范嘉琪' ? '👑 组长' : '👤 组员';
+  }else{
+    tag.style.display='none';
+  }
+}
+
+function renderMyPanel(){
+  const panel = document.getElementById('mypanel');
+  if(!myName){ panel.style.display='none'; return; }
+  panel.style.display='block';
+  const list = document.getElementById('mylist');
+  const empty = document.getElementById('myEmpty');
+  let html='';
+  state.sessions.forEach((s,si)=>{
+    const myRole = getMyRoleAt(si, myName);
+    if(myRole){
+      const role = ROLES.find(r=>r.id===myRole);
+      const canCancel = isOpen(si);
+      html += `
+      <div class="myitem">
+        ${avatarHTML(myName,true)}
+        <div class="mi-info">
+          <div class="mi-role">${role.icon} ${role.name}</div>
+          <div class="mi-session">第${si+1}次 · ${SESSIONS_DATA[si].topic}</div>
+        </div>
+        ${canCancel?`<button class="mi-cancel" data-s="${si}" data-r="${myRole}">取消</button>`:''}
+      </div>`;
+    }
+  });
+  list.innerHTML = html;
+  empty.style.display = html ? 'none' : 'block';
+}
+
+function renderSessions(){
+  const wrap = document.getElementById('sessions');
+  wrap.innerHTML = SESSIONS_DATA.map((sess,si)=>{
+    const open = isOpen(si);
+    const type = state.types[si] || 'ppt';
+    const isDrama = type === 'drama';
+    const s = state.sessions[si];
+    const filled = SLOT_IDS.filter(id=>s[id]).length;
+    const full = filled === SLOT_IDS.length;
+    return `
+    <div class="session ${isDrama?'drama':''} ${!open?'locked':''}" data-session="${si}">
+      <div class="session-head">
+        <div class="s-num">${String(si+1).padStart(2,'0')}</div>
+        <div class="s-fields">
+          <div class="s-title">${sess.topic}</div>
+          <div class="s-meta">
+            <span class="s-date">📅 ${sess.date}</span>
+            <span class="s-type ${type}" title="点击切换 纯PPT / 情景剧">${isDrama?'🎭 情景剧+PPT':'📽️ 纯PPT'}</span>
+            <span class="s-status ${open?(full?'full':'open'):'locked'}">
+              ${open ? (full?'已满员':'开放中') : '未开放'}
+            </span>
+            ${!open ? `<span class="s-openat">🔒 ${openAtLabel(si)} 开抢</span>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="slots">
+        ${ROLES.map(r=>{
+          const taken = s[r.id];
+          const check = myName ? canBid(si, r.id, myName) : {ok:false};
+          // 智能提示：当前用户在这个岗位还是 0 次，鼓励优先抢
+          const myZero = myName && getBlockCount(myName, r.id) === 0;
+          return `
+          <div class="slot" data-role="${r.id}">
+            <div class="slot-ico" style="background:${r.bg}">${r.icon}</div>
+            <div class="slot-info">
+              <div class="slot-name">
+                ${r.name}
+                ${myZero && open && !taken ? '<span style="font-size:10.5px;color:#059669;background:#d1fae5;padding:2px 8px;border-radius:999px;font-weight:700">⭐ 你还没试过</span>' : ''}
+                ${isDrama && r.id==='research' ? '<span style="font-size:10.5px;color:#b45309;background:#fef3c7;padding:2px 8px;border-radius:999px;font-weight:700">📝 本场需写剧本</span>' : ''}
+              </div>
+              <div class="slot-duty">${r.duty}</div>
+            </div>
+            ${taken
+              ? `<div class="slot-taken">${avatarHTML(taken,true)}&nbsp;<span class="who">${taken}</span></div>
+                 ${(taken===myName && open) ? `<button class="slot-btn cancel" data-s="${si}" data-r="${r.id}">取消</button>` : ''}`
+              : `<button class="slot-btn" data-s="${si}" data-r="${r.id}" ${check.ok?'':'disabled title="'+check.msg+'"'}>抢单</button>`
+            }
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// 统计某人抢到某岗位的总次数
+function getBlockCount(name, role){
+  return state.sessions.filter(s=>s[role]===name).length;
+}
+
+function renderOverview(){
+  let filled=0, open=0;
+  state.sessions.forEach((s,si)=>{
+    filled += SLOT_IDS.filter(id=>s[id]).length;
+    if(isOpen(si)) open++;
+  });
+  document.getElementById('ovFilled').textContent = filled + '/' + (10*SLOT_IDS.length);
+  document.getElementById('ovOpen').textContent = open;
+}
+
+function renderProgress(){
+  // 统计每人每岗位次数
+  const m = MEMBERS.map(()=>ROLES.map(()=>0));
+  state.sessions.forEach(s=>{
+    SLOT_IDS.forEach((role,ri)=>{
+      const name = s[role];
+      if(name){
+        const pi = MEMBERS.indexOf(name);
+        if(pi>=0) m[pi][ri]++;
+      }
+    });
+  });
+
+  let html = `<thead><tr><th style="text-align:left">组员</th>`+
+    ROLES.map(r=>`<th><span class="e">${r.icon}</span>${r.short||r.name}</th>`).join('')+
+    `<th><span class="e">📈</span>总任务</th></tr></thead><tbody>`;
+
+  MEMBERS.forEach((name,pi)=>{
+    const total = m[pi].reduce((a,b)=>a+b,0);
+    html += `<tr><td><div class="mname">${avatarHTML(name)}<span>${name}${name==='范嘉琪'?' 👑':''}</span></div></td>`;
+    m[pi].forEach((v,ri)=>{
+      const hue = (262+ri*47)%360;
+      const alpha = v===0 ? 0 : Math.min(.15+v*.18,.82);
+      const style = v===0 ? '' : `style="background:hsla(${hue},70%,45%,${alpha});color:${v>=2?'#fff':'var(--purple-d)'}"`;
+      html += `<td><span class="pcell ${v===0?'zero':''}" ${style}>${v}</span></td>`;
+    });
+    html += `<td><span class="pcell total">${total}</span></td></tr>`;
+  });
+  html += `</tbody>`;
+  document.getElementById('pmatrix').innerHTML = html;
+}
+
+function renderAll(){
+  renderIdentity();
+  renderMyPanel();
+  renderSessions();
+  renderOverview();
+  renderProgress();
+}
+
+/* ============================================================
+   事件绑定
+============================================================ */
+function bind(){
+  document.getElementById('whoami').addEventListener('change', e=>{
+    myName = e.target.value;
+    renderAll();
+  });
+
+  document.getElementById('sessions').addEventListener('click', e=>{
+    // 点击形式标签：切换 纯PPT / 情景剧
+    const chip = e.target.closest('.s-type');
+    if(chip){
+      const si = +chip.closest('.session').dataset.session;
+      state.types[si] = state.types[si]==='drama' ? 'ppt' : 'drama';
+      save(); renderAll();
+      return;
+    }
+    const btn = e.target.closest('.slot-btn');
+    if(!btn) return;
+    const si = +btn.dataset.s, role = btn.dataset.r;
+    if(btn.classList.contains('cancel')){
+      // 取消
+      state.sessions[si][role] = '';
+      save(); renderAll();
+      return;
+    }
+    // 抢单
+    const check = canBid(si, role, myName);
+    if(!check.ok){ alert(check.msg); return; }
+    state.sessions[si][role] = myName;
+    save(); renderAll();
+  });
+
+  document.getElementById('mylist').addEventListener('click', e=>{
+    const btn = e.target.closest('.mi-cancel');
+    if(!btn) return;
+    const si = +btn.dataset.s, role = btn.dataset.r;
+    state.sessions[si][role] = '';
+    save(); renderAll();
+  });
+
+  document.getElementById('btnPrint').addEventListener('click', ()=>window.print());
+}
+
+/* ============================================================
+   启动
+============================================================ */
+(function init(){
+  load();
+  renderAll();
+  bind();
+})();
+</script>
+</body>
+</html>
