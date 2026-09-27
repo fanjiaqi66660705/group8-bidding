@@ -240,7 +240,7 @@
 <header class="banner">
   <span class="badge-eyebrow">🎬 ENGLISH VIDEO · LISTENING & SPEAKING</span>
   <h1><span class="grp">第八组</span> · 任务抢单系统</h1>
-  <p class="sub">10次展示 · 7大岗位 · 先到先得云端实时同步，每人每个岗位都要尝试一遍，组长组员完全平等。</p>
+  <p class="sub">10次展示 · 7大岗位 · 先到先得云端实时同步。前7场每人轮遍全部岗位（每岗仅一次），第8-10场三场岗位互不重复，组长组员完全平等。</p>
   <div class="banner-actions">
     <button class="btn btn-light" id="btnPrint">🖨️ 打印 / 导出 PDF</button>
   </div>
@@ -498,17 +498,21 @@ function getMyRoleAtIn(st, sessionIdx, name){
   return null;
 }
 
+// 分阶段：第1-7场为第一阶段（轮遍7个岗位），第8-10场为第二阶段（三场互不重复）
+function blockStartOf(sessionIdx){ return sessionIdx < 7 ? 0 : 7; }
+
 function canBidOn(st, sessionIdx, role, name){
   if(!name) return {ok:false, msg:'请先选择身份'};
   if(!isOpen(sessionIdx)) return {ok:false, msg:'本场尚未开放'};
   if(st.sessions[sessionIdx][role]) return {ok:false, msg:'该岗位已被抢'};
   if(getMyRoleAtIn(st, sessionIdx, name)) return {ok:false, msg:'你在本场已抢到岗位'};
-  // 不能和最近一次抢到的岗位相同
-  for(let i = sessionIdx - 1; i >= 0; i--){
-    const prevRole = getMyRoleAtIn(st, i, name);
-    if(prevRole){
-      if(prevRole === role) return {ok:false, msg:'上次已选过该岗位，请尝试其他岗位'};
-      break; // 只对比最近一次
+  // 同一阶段内，每个岗位只能选一次
+  const blockStart = blockStartOf(sessionIdx);
+  for(let i = blockStart; i < sessionIdx; i++){
+    if(st.sessions[i][role] === name){
+      return {ok:false, msg: blockStart === 0
+        ? '前7场中你已选过该岗位，这一阶段每人每岗位只能选一次'
+        : '第8-10场中你已选过该岗位，这三场岗位不能重复'};
     }
   }
   return {ok:true};
@@ -517,6 +521,16 @@ function canBidOn(st, sessionIdx, role, name){
 // 统计某人抢到某岗位的总次数
 function getBlockCount(name, role){
   return state.sessions.filter(s=>s[role]===name).length;
+}
+
+// 统计某人在当前阶段（截至本场之前）选过某岗位的次数
+function getBlockStageCount(name, role, sessionIdx){
+  const blockStart = blockStartOf(sessionIdx);
+  let c = 0;
+  for(let i = blockStart; i < sessionIdx; i++){
+    if(state.sessions[i][role] === name) c++;
+  }
+  return c;
 }
 
 /* ============================================================
@@ -606,14 +620,14 @@ function renderSessions(){
         ${ROLES.map(r=>{
           const taken = s[r.id];
           const check = canBidOn(state, si, r.id, myName);
-          const myZero = myName && getBlockCount(myName, r.id) === 0;
+          const myZero = myName && getBlockStageCount(myName, r.id, si) === 0;
           return `
           <div class="slot" data-role="${r.id}">
             <div class="slot-ico" style="background:${r.bg}">${r.icon}</div>
             <div class="slot-info">
               <div class="slot-name">
                 ${r.name}
-                ${myZero && open && !taken ? '<span style="font-size:10.5px;color:#059669;background:#d1fae5;padding:2px 8px;border-radius:999px;font-weight:700">⭐ 你还没试过</span>' : ''}
+                ${myZero && open && !taken ? '<span style="font-size:10.5px;color:#059669;background:#d1fae5;padding:2px 8px;border-radius:999px;font-weight:700">⭐ 本阶段还没试过</span>' : ''}
                 ${isDrama && r.id==='research' ? '<span style="font-size:10.5px;color:#b45309;background:#fef3c7;padding:2px 8px;border-radius:999px;font-weight:700">📝 本场需写剧本</span>' : ''}
               </div>
               <div class="slot-duty">${r.duty}</div>
