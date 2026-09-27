@@ -352,6 +352,9 @@ function parseDate(str){
 }
 
 function isOpen(sessionIdx){
+  // 【测试开关】true=所有场次全部开放；测试完改回 false 即恢复按日期自动开放
+  const TEST_ALL_OPEN = true;
+  if(TEST_ALL_OPEN) return true;
   // 第1场直接开放；之后每场在上一次汇报当天中午12:00开放
   if(sessionIdx === 0) return true;
   const prevEnd = parseDate(SESSIONS_DATA[sessionIdx-1].date);
